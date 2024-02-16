@@ -1,0 +1,4 @@
+nftables_exporter:
+  bind_to: "{{ ansible_default_ipv4.address }}:{{ hbf_nft_exporter.port }}"
+  url_path: "{{ hbf_nft_exporter.endpoint }}"
+  nft_location: /opt/swarm/sbin/nft

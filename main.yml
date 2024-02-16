@@ -1,0 +1,17 @@
+---
+- name: Install hbf-agent
+  hosts: localhost # hbf-instances
+  gather_facts: true
+  become: true
+  roles:
+    - role: hbf
+      vars:
+        hbf_agent_enabled: true
+        hbf_agent_version: 1.9.1
+        hbf_ndpi_enabled: false
+        hbf_ndpi_version: '4.9.2'
+        hbf_agent_fqdn_mode: dns
+        hbf_swarm_nft_enabled: true
+        hbf_swarm_libnftnl_version: '1.2.7'
+        hbf_swarm_nft_version: '1.0.9.3'
+        hbf_nftables_exporter_version: '0.2.8-patch'

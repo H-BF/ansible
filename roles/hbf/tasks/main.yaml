@@ -1,0 +1,70 @@
+---
+# tasks file for hbf
+- name: Gather the packages facts
+  ansible.builtin.package_facts:
+    manager: auto
+
+- name: Check available kernel headers
+  vars:
+    check_package_name: linux-headers-{{ ansible_facts.kernel }}
+  ansible.builtin.fail:
+    msg: Current kernel version ({{ ansible_facts.kernel }}) doesn't have available linux-headers package.
+  when: not check_package_name in ansible_facts.packages
+
+- name: Install, configure, and start HBF-agent
+  when: hbf_agent_enabled
+  tags:
+    - hbf_install
+  block:
+    - name: Populate service facts
+      ansible.builtin.service_facts:
+
+    - name: Prepare DNS servers for hbf core rules
+      ansible.builtin.set_fact:
+        hbf_server_rules_dns_servers: "{{ hbf_server_rules_dns_servers | default([]) + [item + '/32'] }}"
+      with_items: "{{ dns_servers }}"
+      tags:
+        - configs
+
+    - name: Base directories exist
+      ansible.builtin.file:
+        path: "{{ dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      with_items:
+        - "{{ swarm_base_path }}/etc/to-nft"
+        - "{{ swarm_base_path }}/etc/nftables-exporter"
+      loop_control:
+        loop_var: dir
+
+    - name: Configure files
+      vars:
+        hbf_resolv_nameserver:
+          - "{{ ansible_default_ipv4.address }}"
+      ansible.builtin.include_role:
+        name: hbf
+        tasks_from: templates.yaml
+      tags:
+        - configs
+      loop_control:
+        loop_var: templates
+      with_dict: "{{ hbf_components }}"
+
+    - name: Install Packages
+      ansible.builtin.include_role:
+        name: hbf
+        tasks_from: packages.yaml
+      tags:
+        - pkg
+      loop_control:
+        loop_var: templates
+      with_dict: "{{ hbf_components }}"
+
+- name: Disable HBF-agent
+  ansible.builtin.systemd:
+    name: hbf-agent
+    state: stopped
+    enabled: false
+  when: not hbf_agent_enabled

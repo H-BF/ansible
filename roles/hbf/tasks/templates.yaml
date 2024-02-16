@@ -1,0 +1,45 @@
+---
+- name: Block Configure files
+  tags:
+    - configs
+    - hbf_install
+  block:
+    - name: "Configure files {{ templates.key }}"
+      vars:
+        service: "{{ templates.value.service | default({}) }}"
+        service_name: "{{ service.name | default('') }}"
+        trigger_list: "{{ service.trigger | default([]) }}"
+        trigger_uniq_name_list: |-
+          {%- for trigger in trigger_list -%}
+          {{ trigger }}:{{ service_name }}
+          {% endfor %}
+        trigger_list_prepare: "{{ trigger_uniq_name_list.split('\n') |  reject('equalto', '') }}"
+      ansible.builtin.template:
+        src: "{{ template.src }}"
+        dest: "{{ template.dest }}"
+        owner: "{{ template.owner | default('root') }}"
+        group: "{{ template.group | default('root') }}"
+        mode: "{{ template.mode | default('0644') }}"
+      with_items: "{{ templates.value.files | default([]) }}"
+      loop_control:
+        loop_var: template
+      register: templates_results
+      notify: "{{ trigger_list_prepare | default([]) }}"
+      when: not template.garbage_collector | default(false) and templates.value.enabled | default(true)
+
+    - name: Set all facts by templates
+      ansible.builtin.set_fact:
+        all_templates_results: "{{ (all_results | default({})) | ansible.builtin.combine({templates.key: templates_results}) }}"
+
+    - name: "Remove file(s) {{ templates.key }}"
+      ansible.builtin.file:
+        path: "{{ template.dest }}"
+        state: absent
+      with_items: "{{ templates.value.files | default([]) }}"
+      loop_control:
+        loop_var: template
+      when: template.garbage_collector | default(false) or not templates.value.enabled | default(true)
+
+  rescue:
+    - name: Make sure all handlers run
+      ansible.builtin.meta: flush_handlers
