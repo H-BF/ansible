@@ -1,0 +1,15 @@
+---
+- name: restart:{{ service_name }}
+  vars:
+    service: "{{ templates.value.service | default({}) }}"
+    service_name: "{{ service.name | default('') }}"
+  ansible.builtin.systemd:
+    name: "{{ service_name }}"
+    state: restarted
+    enabled: true
+    daemon_reload: true
+
+- name: reboot:shutdown
+  ansible.builtin.reboot:
+    reboot_timeout: 3600
+    msg: rebooting machine in 5 seconds

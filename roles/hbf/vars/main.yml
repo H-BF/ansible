@@ -1,0 +1,94 @@
+---
+hbf_server:
+  extapi:
+    address: ''
+    port: ''
+
+  rules:
+    extra: []
+
+hbf_base_rules: "{{ hbf_server.rules.extra + [hbf_server.extapi.address + '/32'] }}"
+
+hbf_nft_exporter:
+  port: 9630
+  endpoint: /metrics
+
+swarm_base_path: /opt/swarm
+
+hbf_components:
+
+  hbf-agent:
+    enabled: "{{ hbf_agent_enabled }}"
+    packages:
+      - name: to-nft
+        version: "{{ hbf_agent_version }}"
+        from_github: true
+        github_url: "https://github.com/H-BF/sgroups/releases/download/v{{ hbf_agent_version }}/to-nft-{{ hbf_agent_version }}"
+    files:
+      # Configure HBF config
+      - src: "{{ role_path }}/templates/hbf-agent/config.yaml.j2"
+        dest: "{{ swarm_base_path }}/etc/to-nft/config.yaml"
+
+    service:
+      name: hbf-agent
+      trigger:
+        - restart
+
+  ndpi:
+    packages:
+      - name: xt-ndpi
+        version: "{{ hbf_ndpi_version }}"
+        from_github: true
+        github_url: "https://github.com/H-BF/nDPI/releases/download/v{{ hbf_ndpi_version }}/xt-ndpi-{{ hbf_ndpi_version }}"
+        garbage_collector: "{{ hbf_ndpi_enabled == false | default(true) }}"
+
+    files:
+      - src: "{{ role_path }}/templates/modprobe/hbf-modprobe.service"
+        dest: /etc/systemd/system/hbf-modprobe.service
+        garbage_collector: "{{ hbf_ndpi_enabled == false | default(true) }}"
+
+    service:
+      name: shutdown
+      trigger:
+        - reboot
+
+  default:
+    packages:
+      - name: nftables
+        version: ""
+        from_github: false 
+      - name: "linux-headers-{{ ansible_facts.kernel }}"
+        version: ""
+        from_github: false
+
+  nft_exporter:
+    enabled: true
+    packages:
+      - name: nftables-exporter
+        version: "{{ hbf_nftables_exporter_version }}"
+        from_github: true
+        github_url: "https://github.com/H-BF/nftables-exporter/releases/download/v{{ hbf_nftables_exporter_version }}/nftables-exporter-{{ hbf_nftables_exporter_version }}"
+
+    files:
+      - src: "{{ role_path }}/templates/nftables-exporter/nftables_exporter.yaml.j2"
+        dest: "{{ swarm_base_path }}/etc/nftables-exporter/config.yaml"
+
+    service:
+      name: nftables-exporter
+      trigger:
+        - restart
+
+  swarm-nft:
+    enabled: "{{ hbf_swarm_nft_enabled | default(false) }}"
+    packages:
+      - name: swarm-libnftnl
+        version: "{{ hbf_swarm_libnftnl_version }}"
+        from_github: true
+        github_url: "https://github.com/H-BF/libnftnl/releases/download/v{{ hbf_swarm_libnftnl_version }}/swarm-libnftnl-{{ hbf_swarm_libnftnl_version }}"
+        garbage_collector: "{{ hbf_swarm_nft_enabled == false | default(true) }}"
+
+      - name: swarm-nft
+        version: "{{ hbf_swarm_nft_version }}"
+        from_github: true
+        github_url: "https://github.com/H-BF/nft/releases/download/v{{ hbf_swarm_nft_version }}/swarm-nft-{{ hbf_swarm_nft_version }}"
+        garbage_collector: "{{ hbf_swarm_nft_enabled == false | default(true) }}"

@@ -1,0 +1,90 @@
+---
+- name: Block Install Packages
+  tags:
+    - pkg
+    - hbf_install
+  block:
+    - name: "Install Deb Package {{ templates.key }}"
+      vars:
+        service: "{{ templates.value.service | default({}) }}"
+        service_name: "{{ service.name | default('') }}"
+        trigger_list: "{{ service.trigger | default([]) }}"
+        trigger_uniq_name_list: |-
+          {%- for trigger in trigger_list -%}
+          {{ trigger }}:{{ service_name }}
+          {% endfor %}
+        trigger_list_prepare: "{{ trigger_uniq_name_list.split('\n') |  reject('equalto', '') }}"
+      ansible.builtin.apt:
+        name: "{{ package.name }}{% if package.version != '' %}={{ package.version }}{% endif %}"
+        state: present
+        update_cache: true
+      with_items: "{{ templates.value.packages | default({}) }}"
+      loop_control:
+        loop_var: package
+      register: packages_results
+      notify: "{{ trigger_list_prepare | default([]) }}"
+      when: >
+        not package.garbage_collector | default(false) and templates.value.enabled | default(true) and
+        (ansible_facts['distribution'] == 'Debian' or ansible_facts['distribution'] == 'Ubuntu') and not package.from_github
+
+    - name: "Install Deb Package from Github {{ templates.key }}"
+      vars:
+        service: "{{ templates.value.service | default({}) }}"
+        service_name: "{{ service.name | default('') }}"
+        trigger_list: "{{ service.trigger | default([]) }}"
+        trigger_uniq_name_list: |-
+          {%- for trigger in trigger_list -%}
+          {{ trigger }}:{{ service_name }}
+          {% endfor %}
+        trigger_list_prepare: "{{ trigger_uniq_name_list.split('\n') |  reject('equalto', '') }}"
+      ansible.builtin.apt:
+        deb: "{{ package.github_url }}-any.deb"
+        state: present
+        update_cache: true
+      with_items: "{{ templates.value.packages | default({}) }}"
+      loop_control:
+        loop_var: package
+      register: packages_results
+      notify: "{{ trigger_list_prepare | default([]) }}"
+      when: >
+        not package.garbage_collector | default(false) and templates.value.enabled | default(true) and
+        (ansible_facts['distribution'] == 'Debian' or ansible_facts['distribution'] == 'Ubuntu') and package.from_github
+
+    - name: "Install RPM Package {{ templates.key }}"
+      vars:
+        service: "{{ templates.value.service | default({}) }}"
+        service_name: "{{ service.name | default('') }}"
+        trigger_list: "{{ service.trigger | default([]) }}"
+        trigger_uniq_name_list: |-
+          {%- for trigger in trigger_list -%}
+          {{ trigger }}:{{ service_name }}
+          {% endfor %}
+        trigger_list_prepare: "{{ trigger_uniq_name_list.split('\n') |  reject('equalto', '') }}"
+      ansible.builtin.yum:
+        name: "{% if package.github_url != '' and package.from_github %}{{ package.github_url }}-any.rpm{% else %}{{ package.name }}{% if package.version != '' %}={{ package.version }}{% endif %}"
+        state: present
+        update_cache: true
+      with_items: "{{ templates.value.packages | default({}) }}"
+      loop_control:
+        loop_var: package
+      register: packages_results
+      notify: "{{ trigger_list_prepare | default([]) }}"
+      when: not package.garbage_collector | default(false) and templates.value.enabled | default(true) and ansible_facts['distribution'] == 'CentOS'
+
+    - name: Set all facts by packages
+      ansible.builtin.set_fact:
+        all_packages_results: "{{ (all_results | default({})) | ansible.builtin.combine({templates.key: packages_results}) }}"
+
+    - name: Remove Packages {{ templates.key }}
+      ansible.builtin.package:
+        name: "{{ package_remove.name }}{% if package_remove.version != '' %}={{ package_remove.version }}{% endif %}"
+        state: absent
+        update_cache: true
+      with_items: "{{ templates.value.packages | default({}) }}"
+      loop_control:
+        loop_var: package_remove
+      when: package.garbage_collector | default(false) or not templates.value.enabled | default(true)
+
+  rescue:
+    - name: Make sure all handlers run
+      ansible.builtin.meta: flush_handlers

@@ -1,0 +1,42 @@
+graceful-shutdown: 10s
+
+logger:
+  level: DEBUG
+
+fqdn-rules:
+  strategy: {{ hbf_agent_fqdn_mode | default("dns") }}
+
+extapi:
+  svc:
+    def-daial-duration: 10s
+    sgroups:
+      dial-duration: 3s
+      address: 'tcp://{{ hbf_server.extapi.address }}:{{ hbf_server.extapi.port }}'
+      sync-status:
+        interval: 3s #mandatory
+        push: true
+
+netlink:
+  watcher: #netlink watcher
+    linger: 1s
+
+base-rules:
+  networks: {{ hbf_base_rules }}
+
+dns:
+  nameservers: {{ dns_servers }}
+  proto: tcp
+  port: 53
+  dial-duration: 3s
+  read-duration: 5s #default 
+  write-duration: 5s #default 5s
+  retries: 5 #default 1
+  retry-timeout: 3s #default 1s
+
+telemetry:
+  useragent: "string"
+  endpoint: 0.0.0.0:9660
+  metrics:
+    enable: true
+  healthcheck:
+    enable: true
